@@ -13,7 +13,7 @@ test="npm run clean; npm install --unsafe-perm; npm test"
 for dist in debian:jessie debian:stretch ubuntu:trusty ubuntu:xenial; do
   echo "Testing $dist..."
   docker pull $dist
-  if docker run -i -t --rm -v $PWD:/v $dist >packaging/$dist.log 2>&1 sh -c "cd /v; ./packaging/test/debian.sh; $test";
+  if docker run -i -t --rm -v $PWD:/v $dist >packaging/$dist.log 2>&1 sh -c "SHARP_DIST_BASE_URL=https://github.com/fasterize/sharp-libvips/releases/download/v8.7.4/; cd /v; ./packaging/test/debian.sh; $test";
   then echo "$dist OK"
   else echo "$dist fail" && cat packaging/$dist.log
   fi

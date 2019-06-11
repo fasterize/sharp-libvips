@@ -33,8 +33,8 @@ VERSION_GDKPIXBUF=2.36.12
 VERSION_FREETYPE=2.10.0
 VERSION_EXPAT=2.2.6
 VERSION_UUID=2.33.2
-VERSION_FONTCONFIG=2.13.1
-VERSION_HARFBUZZ=2.4.0
+VERSION_FONTCONFIG=2.13.91
+VERSION_HARFBUZZ=2.5.1
 VERSION_PIXMAN=0.38.4
 VERSION_CAIRO=1.16.0
 VERSION_FRIBIDI=1.0.5
@@ -42,6 +42,8 @@ VERSION_PANGO=1.42.4
 VERSION_CROCO=0.6.13
 VERSION_SVG=2.45.5
 VERSION_GIF=5.1.4
+VERSION_LIBIMAGEQUANT=2.12.3
+VERSION_MOZJPEG=3.3.1
 
 # Least out-of-sync Sourceforge mirror
 SOURCEFORGE_BASE_URL=https://netix.dl.sourceforge.net/project/
@@ -86,6 +88,8 @@ version_latest "fribidi" "$VERSION_FRIBIDI" "857"
 version_latest "croco" "$VERSION_CROCO" "11787"
 #version_latest "svg" "$VERSION_SVG" "5420" latest version fails to link against latest cairo
 #version_latest "gif" "$VERSION_GIF" "1158" # v5.1.5+ provides a Makefile only so will require custom cross-compilation setup
+version_latest "libimagequant" "$VERSION_LIBIMAGEQUANT" "12768"
+
 if [ "$ALL_AT_VERSION_LATEST" = "false" ]; then exit 1; fi
 
 # Download and build dependencies from source
@@ -99,6 +103,12 @@ case ${PLATFORM} in *musl*)
   rm ${TARGET}/include/gettext-po.h
   rm -rf ${TARGET}/lib/*gettext*
 esac
+
+mkdir ${DEPS}/libimagequant
+curl -Ls https://github.com/ImageOptim/libimagequant/archive/${VERSION_LIBIMAGEQUANT}.tar.gz | tar xzC ${DEPS}/libimagequant --strip-components=1
+cd ${DEPS}/libimagequant
+./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking
+make install
 
 mkdir ${DEPS}/zlib
 curl -Ls http://zlib.net/zlib-${VERSION_ZLIB}.tar.xz | tar xJC ${DEPS}/zlib --strip-components=1
@@ -150,13 +160,20 @@ cd ${DEPS}/lcms2
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking
 make install-strip
 
-mkdir ${DEPS}/jpeg
-curl -Ls https://github.com/libjpeg-turbo/libjpeg-turbo/archive/${VERSION_JPEG}.tar.gz | tar xzC ${DEPS}/jpeg --strip-components=1
-cd ${DEPS}/jpeg
-sed -i "s/cmake_minimum_required(VERSION 2.8.12)/cmake_minimum_required(VERSION 2.8.11)/" CMakeLists.txt
-cmake -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=/root/Toolchain.cmake -DCMAKE_INSTALL_PREFIX=${TARGET} -DCMAKE_INSTALL_LIBDIR=${TARGET}/lib \
-  -DENABLE_SHARED=TRUE -DENABLE_STATIC=FALSE -DWITH_JPEG8=1 -DWITH_TURBOJPEG=FALSE
-make install/strip
+# mkdir ${DEPS}/jpeg
+# curl -Ls https://github.com/libjpeg-turbo/libjpeg-turbo/archive/${VERSION_JPEG}.tar.gz | tar xzC ${DEPS}/jpeg --strip-components=1
+# cd ${DEPS}/jpeg
+# sed -i "s/cmake_minimum_required(VERSION 2.8.12)/cmake_minimum_required(VERSION 2.8.11)/" CMakeLists.txt
+# cmake -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=/root/Toolchain.cmake -DCMAKE_INSTALL_PREFIX=${TARGET} -DCMAKE_INSTALL_LIBDIR=${TARGET}/lib \
+#   -DENABLE_SHARED=TRUE -DENABLE_STATIC=FALSE -DWITH_JPEG8=1 -DWITH_TURBOJPEG=FALSE
+# make install/strip
+
+mkdir ${DEPS}/mozjpeg
+curl -Ls https://github.com/mozilla/mozjpeg/archive/v${VERSION_MOZJPEG}.tar.gz | tar xzC ${DEPS}/mozjpeg --strip-components=1
+cd ${DEPS}/mozjpeg
+autoreconf -fiv
+./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking --with-jpeg8
+make install
 
 mkdir ${DEPS}/png16
 curl -Ls ${SOURCEFORGE_BASE_URL}libpng/libpng16/${VERSION_PNG16}/libpng-${VERSION_PNG16}.tar.xz | tar xJC ${DEPS}/png16 --strip-components=1
@@ -220,14 +237,14 @@ sed -i "s/getrandom/ignore_getrandom/g" configure
 make install-strip
 
 mkdir ${DEPS}/fontconfig
-curl -Ls https://www.freedesktop.org/software/fontconfig/release/fontconfig-${VERSION_FONTCONFIG}.tar.bz2 | tar xjC ${DEPS}/fontconfig --strip-components=1
+curl -Ls https://www.freedesktop.org/software/fontconfig/release/fontconfig-${VERSION_FONTCONFIG}.tar.gz | tar xzC ${DEPS}/fontconfig --strip-components=1
 cd ${DEPS}/fontconfig
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking \
   --with-expat-includes=${TARGET}/include --with-expat-lib=${TARGET}/lib --sysconfdir=/etc
 make install-strip
 
 mkdir ${DEPS}/harfbuzz
-curl -Ls https://www.freedesktop.org/software/harfbuzz/release/harfbuzz-${VERSION_HARFBUZZ}.tar.bz2 | tar xjC ${DEPS}/harfbuzz --strip-components=1
+curl -Ls https://www.freedesktop.org/software/harfbuzz/release/harfbuzz-${VERSION_HARFBUZZ}.tar.xz | tar xJC ${DEPS}/harfbuzz --strip-components=1
 cd ${DEPS}/harfbuzz
 sed -i "s/error   \"-Wunused-local-typedefs\"/ignored \"-Wunused-local-typedefs\"/" src/hb.hh
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking
@@ -292,7 +309,8 @@ cd ${DEPS}/vips
   --disable-debug --disable-introspection --without-python --without-fftw \
   --without-magick --without-pangoft2 --without-ppm --without-analyze --without-radiance \
   --with-zip-includes=${TARGET}/include --with-zip-libraries=${TARGET}/lib \
-  --with-jpeg-includes=${TARGET}/include --with-jpeg-libraries=${TARGET}/lib
+  --with-jpeg-includes=${TARGET}/include --with-jpeg-libraries=${TARGET}/lib \
+  --with-imagequant
 make install-strip
 
 # Remove the old C++ bindings
@@ -318,6 +336,7 @@ printf "{\n\
   \"glib\": \"${VERSION_GLIB}\",\n\
   \"gsf\": \"${VERSION_GSF}\",\n\
   \"harfbuzz\": \"${VERSION_HARFBUZZ}\",\n\
+  \"imagequant\": \"${VERSION_LIBIMAGEQUANT}\",\n\
   \"jpeg\": \"${VERSION_JPEG}\",\n\
   \"lcms\": \"${VERSION_LCMS2}\",\n\
   \"orc\": \"${VERSION_ORC}\",\n\
